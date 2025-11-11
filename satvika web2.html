@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Archsight connects your creative ideas with professional 3D designers and architects.">
+    <meta name="keywords" content="3D design, architecture, rendering, interior design">
+    <meta property="og:title" content="Archsight - Your Vision in 3D">
+    <meta property="og:description" content="Create, customize, and collaborate on 3D designs with professional architects.">
+    <meta property="og:image" content="https://placehold.co/600x400/1e40af/ffffff?text=AS">
+    <title>Archsight - Your Vision in 3D</title>
+    <link rel="icon" href="https://placehold.co/32x32/1e40af/ffffff?text=AS" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(200, 220, 255, 0.5);
+            --glass-shadow: rgba(0, 0, 0, 0.1);
+            --glass-hover-shadow: rgba(0, 0, 0, 0.15);
+            --text-color: #1e293b;
+            --primary-blue: #1e40af;
+            --secondary-blue: #3b82f6;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-color);
+            background: #f8fafc;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+        }
+
+        .glass-morphism {
+            backdrop-filter: blur(12px);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 8px var(--glass-shadow);
+            transition: all 0.4s ease;
+        }
+
+        .glass-morphism:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px var(--glass-hover-shadow);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-blue);
+            border-radius: 8px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--secondary-blue);
+        }
+
+        .message-box {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.8rem 1.2rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 0.3s ease-out, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-leave-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.3s ease-out, transform 0.3s ease-in;
+        }
+
+        #threed-canvas {
+            width: 100%;
+            height: 360px;
+            display: block;
+            border-radius: 0.8rem;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 8px var(--glass-shadow);
+        }
+
+        .threed-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        @media (min-width: 768px) {
+            .threed-container {
+                flex-direction: row;
+            }
+
+            #threed-canvas {
+                height: 480px;
+            }
+        }
+
+        .portfolio-filter {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1.2rem;
+        }
+
+        .portfolio-filter button {
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.8rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+        }
+
+        .portfolio-filter button.active {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .animate-reveal {
+            opacity: 0;
+            transform: translateY(16px);
+            animation: reveal 0.6s ease forwards;
+        }
+
+        @keyframes reveal {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .gradient-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.3;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(59, 130, 246, 0.4);
+            border-radius: 50%;
+            animation: float 8s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-16px); }
+        }
+    </style>
+</head>
+<body class="selection:bg-blue-500 selection:text-white">
+    <!-- Notification Boxes -->
+    <div id="message-box" class="message-box bg-blue-500 text-white" role="alert"></div>
+    <div id="error-box" class="message-box bg-red-500 text-white" role="alert"></div>
+
+    <!-- Mobile Menu Modal -->
+    <div id="mobile-menu-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden" role="dialog" aria-labelledby="mobile-menu-title">
+        <div class="glass-morphism w-10/12 mx-auto mt-16 p-5 rounded-2xl flex flex-col items-center space-y-4 animate-reveal">
+            <button id="close-modal-btn" class="absolute top-3 right-3 text-gray-800 hover:text-blue-600" aria-label="Close menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <h2 id="mobile-menu-title" class="sr-only">Mobile Navigation Menu</h2>
+            <a href="#services" class="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors duration-300">Services</a>
+            <a href="#portfolio" class="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors duration-300">Portfolio</a>
+            <a href="#architects" class="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors duration-300">Architects</a>
+            <a href="#contact" class="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors duration-300">Contact</a>
+            <a href="#" class="w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-full transition-colors duration-300">Log In</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-5 max-w-7xl relative">
+        <!-- Header -->
+        <header class="glass-morphism rounded-xl p-3 md:p-5 flex justify-between items-center mb-10">
+            <div class="flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.368H6.262a2.25 2.25 0 01-2.247-2.368L3.75 7.5m6 2.25l2.25 2.25m0 0l2.25 2.25M12 13.5l-2.25-2.25M12 13.5l2.25-2.25m-2.25 2.25L12 13.5m-3.75-2.25V5.25A2.25 2.25 0 0110.5 3h3a2.25 2.25 0 012.25 2.25v4.5m-3.75-3.75h.008v.008h-.008v-.008zm1.5-.75h.008v.008h-.008V9.75z" />
+                </svg>
+                <span class="text-lg md:text-xl font-bold text-gray-800">Archsight</span>
+            </div>
+            <nav class="hidden md:flex items-center space-x-5">
+                <a href="#services" class="text-gray-600 hover:text-blue-600 transition-colors duration-300 text-sm">Services</a>
+                <a href="#portfolio" class="text-gray-600 hover:text-blue-600 transition-colors duration-300 text-sm">Portfolio</a>
+                <a href="#architects" class="text-gray-600 hover:text-blue-600 transition-colors duration-300 text-sm">Architects</a>
+                <a href="#contact" class="text-gray-600 hover:text-blue-600 transition-colors duration-300 text-sm">Contact</a>
+                <a href="#" class="bg-blue-100 text-blue-800 font-medium py-1.5 px-4 rounded-full glass-morphism hover:bg-blue-200 transition-colors duration-300 text-sm">Log In</a>
+            </nav>
+            <button id="mobile-menu-btn" class="md:hidden p-1.5 rounded-lg glass-morphism" aria-label="Open mobile menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+            </button>
+        </header>
+
+        <!-- Hero Section -->
+        <section id="hero" class="text-center py-12 md:py-20 mb-10 relative overflow-hidden">
+            <canvas class="gradient-canvas"></canvas>
+            <div class="max-w-3xl mx-auto glass-morphism p-5 md:p-7 rounded-3xl animate-reveal">
+                <h1 class="text-3xl md:text-5xl font-extrabold leading-tight text-gray-900 mb-3">
+                    Your Vision. <br class="md:hidden" />Rendered. <br class="md:hidden" />Realized.
+                </h1>
+                <p class="text-sm md:text-base text-gray-600 max-w-xl mx-auto mb-5">
+                    Archsight is the next generation platform connecting your creative ideas with professional 3D designers and architects.
+                </p>
+                <a href="#services" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-full transition-colors duration-300 shadow-md text-sm">Explore Our Services</a>
+            </div>
+            <div class="absolute inset-0 pointer-events-none">
+                <div class="particle w-2 h-2 top-16 left-8"></div>
+                <div class="particle w-3 h-3 top-32 right-12" style="animation-delay: 2s;"></div>
+                <div class="particle w-2 h-2 bottom-16 left-24" style="animation-delay: 4s;"></div>
+            </div>
+        </section>
+
+        <!-- Services Section -->
+        <section id="services" class="py-10 mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">Our Services</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="glass-morphism p-5 rounded-2xl text-center flex flex-col items-center animate-reveal" style="animation-delay: 0.1s;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 class="text-lg md:text-xl font-semibold mb-2 text-gray-800">3D Design & Rendering</h3>
+                    <p class="text-gray-600 text-sm">Stunning, photorealistic visualizations from concept to final render.</p>
+                </div>
+                <div class="glass-morphism p-5 rounded-2xl text-center flex flex-col items-center animate-reveal" style="animation-delay: 0.2s;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <h3 class="text-lg md:text-xl font-semibold mb-2 text-gray-800">Editable Designs</h3>
+                    <p class="text-gray-600 text-sm">Personalize designs with our intuitive web-based 3D editor.</p>
+                </div>
+                <div class="glass-morphism p-5 rounded-2xl text-center flex flex-col items-center animate-reveal" style="animation-delay: 0.3s;">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a4 4 0 00-4-4H9.5a4 4 0 00-4 4v1h6z" />
+                    </svg>
+                    <h3 class="text-lg md:text-xl font-semibold mb-2 text-gray-800">Connect with Architects</h3>
+                    <p class="text-gray-600 text-sm">Collaborate with qualified architects for your projects.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Portfolio Section -->
+        <section id="portfolio" class="py-10 mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">Our Portfolio</h2>
+            <div class="portfolio-filter">
+                <button class="filter-btn active text-sm" data-filter="all">All</button>
+                <button class="filter-btn text-sm" data-filter="residential">Residential</button>
+                <button class="filter-btn text-sm" data-filter="commercial">Commercial</button>
+                <button class="filter-btn text-sm" data-filter="interior">Interior</button>
+            </div>
+            <div id="portfolio-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </section>
+
+        <!-- 3D Editor Section -->
+        <section id="editor" class="py-10 mb-10 relative">
+            <canvas class="gradient-canvas"></canvas>
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">Intuitive 3D Editor to Sketch or Customize Your Dreams and Designs</h2>
+            <div class="glass-morphism p-5 rounded-3xl threed-container">
+                <div class="w-full md:w-3/4 bg-gray-100 rounded-xl p-3">
+                    <canvas id="threed-canvas" class="bg-gray-200 rounded-lg" role="application" aria-label="3D design editor"></canvas>
+                </div>
+                <div class="w-full md:w-1/4 glass-morphism p-4 rounded-2xl flex flex-col">
+                    <h3 class="text-lg md:text-xl font-semibold mb-3 text-gray-800">Edit Your Design</h3>
+                    <div class="space-y-3 text-gray-600 flex-grow">
+                        <div class="flex flex-col">
+                            <label for="color-picker" class="mb-1 text-xs">Pick Color:</label>
+                            <input type="color" id="color-picker" value="#3b82f6" class="h-8 w-full p-0.5 rounded-lg bg-transparent border-none outline-none">
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="light-intensity-slider" class="mb-1 text-xs">Light Intensity:</label>
+                            <input type="range" id="light-intensity-slider" min="0.1" max="2.0" value="0.6" step="0.1" class="w-full">
+                        </div>
+                    </div>
+                    <div class="space-y-2 mt-3">
+                        <button id="add-object-btn" class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-300 text-xs" aria-label="Add new cube">Add Cube</button>
+                        <button id="undo-btn" class="w-full py-1.5 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors duration-300 text-xs" aria-label="Undo last action">Undo</button>
+                        <button id="export-btn" class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-300 text-xs" aria-label="Export design as GLTF">Export GLTF</button>
+                        <button id="save-design-btn" class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-300 text-xs" aria-label="Save design">Save Design</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architects Section -->
+        <section id="architects" class="py-10 mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">Meet Our Architects</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div class="glass-morphism p-4 rounded-2xl flex items-center space-x-3 animate-reveal" style="animation-delay: 0.1s;">
+                    <img src="https://placehold.co/64x64/333333/ffffff?text=JN" alt="Jane Nichols, Residential & Interior Architect" class="rounded-full h-16 w-16 object-cover border-2 border-blue-600">
+                    <div class="flex-grow">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-800">Jane Nichols</h3>
+                        <p class="text-blue-600 text-xs">Residential & Interior</p>
+                        <p class="text-gray-600 text-xs mt-1">Sustainable and minimalist residential designs.</p>
+                    </div>
+                </div>
+                <div class="glass-morphism p-4 rounded-2xl flex items-center space-x-3 animate-reveal" style="animation-delay: 0.2s;">
+                    <img src="https://placehold.co/64x64/555555/ffffff?text=MJ" alt="Mark Jones, Commercial & Urban Architect" class="rounded-full h-16 w-16 object-cover border-2 border-blue-600">
+                    <div class="flex-grow">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-800">Mark Jones</h3>
+                        <p class="text-blue-600 text-xs">Commercial & Urban</p>
+                        <p class="text-gray-600 text-xs mt-1">Large-scale commercial and urban planning.</p>
+                    </div>
+                </div>
+                <div class="glass-morphism p-4 rounded-2xl flex items-center space-x-3 animate-reveal" style="animation-delay: 0.3s;">
+                    <img src="https://placehold.co/64x64/777777/ffffff?text=SK" alt="Sarah Khan, Product & Industrial Designer" class="rounded-full h-16 w-16 object-cover border-2 border-blue-600">
+                    <div class="flex-grow">
+                        <h3 class="text-base md:text-lg font-semibold text-gray-800">Sarah Khan</h3>
+                        <p class="text-blue-600 text-xs">Product & Industrial</p>
+                        <p class="text-gray-600 text-xs mt-1">Functional and aesthetic product designs.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section id="how-it-works" class="py-10 mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">How It Works</h2>
+            <div class="flex flex-col md:flex-row items-center space-y-5 md:space-y-0 md:space-x-5">
+                <div class="glass-morphism p-5 rounded-2xl text-center flex-1 animate-reveal" style="animation-delay: 0.1s;">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-base mx-auto mb-3">1</div>
+                    <h3 class="text-base md:text-lg font-semibold text-gray-800 mb-2">Create Your Design</h3>
+                    <p class="text-gray-600 text-xs">Use our intuitive 3D editor to sketch or customize.</p>
+                </div>
+                <div class="glass-morphism p-5 rounded-2xl text-center flex-1 animate-reveal" style="animation-delay: 0.2s;">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-base mx-auto mb-3">2</div>
+                    <h3 class="text-base md:text-lg font-semibold text-gray-800 mb-2">Connect with a Pro</h3>
+                    <p class="text-gray-600 text-xs">Find the perfect architect for your project.</p>
+                </div>
+                <div class="glass-morphism p-5 rounded-2xl text-center flex-1 animate-reveal" style="animation-delay: 0.3s;">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-base mx-auto mb-3">3</div>
+                    <h3 class="text-base md:text-lg font-semibold text-gray-800 mb-2">Receive the Final Render</h3>
+                    <p class="text-gray-600 text-xs">Collaborate for a high-quality 3D render.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="py-10">
+            <h2 class="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-8 animate-reveal">Get In Touch</h2>
+            <div class="max-w-md mx-auto glass-morphism p-5 rounded-2xl">
+                <form id="contactForm" class="space-y-4">
+                    <div>
+                        <label for="name" class="block text-xs font-medium text-gray-600 mb-1">Name</label>
+                        <input type="text" id="name" name="name" class="w-full glass-morphism p-2 rounded-lg border-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs" placeholder="John Doe" required aria-required="true">
+                    </div>
+                    <div>
+                        <label for="email" class="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                        <input type="email" id="email" name="email" class="w-full glass-morphism p-2 rounded-lg border-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs" placeholder="you@example.com" required aria-required="true">
+                    </div>
+                    <div>
+                        <label for="message" class="block text-xs font-medium text-gray-600 mb-1">Message</label>
+                        <textarea id="message" name="message" rows="3" class="w-full glass-morphism p-2 rounded-lg border-none focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs" placeholder="How can we help you?" required aria-required="true"></textarea>
+                    </div>
+                    <div class="text-center">
+                        <button type="submit" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-5 rounded-full transition-colors duration-300 shadow-md text-xs" aria-label="Send message">Send Message</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Back to Top Button -->
+    <button id="back-to-top-btn" class="fixed bottom-5 right-5 p-2.5 rounded-full glass-morphism text-blue-600 shadow-md hover:text-blue-700 transition-all duration-300 opacity-0 transform translate-y-4 pointer-events-none" aria-label="Back to top">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+    </button>
+
+    <!-- Footer -->
+    <footer class="glass-morphism p-5 rounded-t-2xl text-center text-gray-600">
+        <p class="text-xs">&copy; 2025 Archsight. All rights reserved.</p>
+        <div class="mt-2 flex justify-center space-x-3 text-xs">
+            <a href="#" class="hover:text-blue-800 transition-colors">Privacy Policy</a>
+            <a href="#" class="hover:text-blue-800 transition-colors">Terms of Service</a>
+        </div>
+    </footer>
+
+    <script>
+        // Global Variables
+        const DOM = {
+            messageBox: document.getElementById('message-box'),
+            errorBox: document.getElementById('error-box'),
+            mobileMenuBtn: document.getElementById('mobile-menu-btn'),
+            mobileMenuModal: document.getElementById('mobile-menu-modal'),
+            closeModalBtn: document.getElementById('close-modal-btn'),
+            backToTopBtn: document.getElementById('back-to-top-btn'),
+            portfolioGrid: document.getElementById('portfolio-grid'),
+            contactForm: document.getElementById('contactForm'),
+            colorPicker: document.getElementById('color-picker'),
+            lightIntensitySlider: document.getElementById('light-intensity-slider'),
+            addObjectBtn: document.getElementById('add-object-btn'),
+            undoBtn: document.getElementById('undo-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            saveDesignBtn: document.getElementById('save-design-btn'),
+        };
+
+        let scene, camera, renderer, controls, objects = [], history = [];
+        let ambientLight, directionalLight, pointLight;
+        let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+
+        // Event Listeners for Mouse/Touch
+        function setupInteraction() {
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 0) {
+                    mouseX = e.touches[0].clientX;
+                    mouseY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+        }
+
+        // Gradient Canvas Animation
+        function setupGradientCanvases() {
+            const canvases = document.querySelectorAll('.gradient-canvas');
+            canvases.forEach(canvas => {
+                const ctx = canvas.getContext('2d');
+                let time = 0;
+
+                function resizeCanvas() {
+                    canvas.width = canvas.parentElement.clientWidth;
+                    canvas.height = canvas.parentElement.clientHeight;
+                }
+
+                function animateGradient() {
+                    time += 0.02;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const centerX = (mouseX / window.innerWidth) * canvas.width;
+                    const centerY = (mouseY / window.innerHeight) * canvas.height;
+                    const gradient = ctx.createRadialGradient(
+                        centerX,
+                        centerY,
+                        canvas.width * 0.1,
+                        centerX,
+                        centerY,
+                        canvas.width * 0.5 + Math.sin(time) * canvas.width * 0.1
+                    );
+                    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+                    gradient.addColorStop(1, 'rgba(30, 64, 175, 0.0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    requestAnimationFrame(animateGradient);
+                }
+
+                resizeCanvas();
+                animateGradient();
+                window.addEventListener('resize', resizeCanvas);
+            });
+        }
+
+        // Portfolio Data
+        const portfolioItems = [
+            { image: "https://placehold.co/600x400/1e40af/ffffff?text=Modern+Kitchen", alt: "Modern Kitchen Design", title: "Sleek Kitchen Interior", description: "Contemporary kitchen with minimalist design.", category: "interior" },
+            { image: "https://placehold.co/600x400/3b82f6/ffffff?text=Cozy+Living+Room", alt: "Cozy Living Room Design", title: "Luxe Living Space", description: "Comfortable living room with textures.", category: "residential" },
+            { image: "https://placehold.co/600x400/60a5fa/ffffff?text=Cityscape+Architecture", alt: "Cityscape Architecture", title: "Urban Architectural Plan", description: "High-fidelity high-rise render.", category: "commercial" },
+            { image: "https://placehold.co/600x400/1e40af/ffffff?text=Studio+Loft", alt: "Studio Loft", title: "Minimalist Studio Loft", description: "Open-concept studio space.", category: "residential" },
+            { image: "https://placehold.co/600x400/3b82f6/ffffff?text=Bedroom+Design", alt: "Bedroom Design", title: "Serene Bedroom Vibe", description: "Calming bedroom with soft fabrics.", category: "interior" },
+            { image: "https://placehold.co/600x400/60a5fa/ffffff?text=Office+Space", alt: "Office Space", title: "Modern Office Interior", description: "Collaborative workspace design.", category: "commercial" }
+        ];
+
+        // UI Helpers
+        function showMessage(text, isError = false) {
+            const box = isError ? DOM.errorBox : DOM.messageBox;
+            box.textContent = text;
+            box.style.opacity = 1;
+            box.style.transform = 'translateX(-50%) translateY(0)';
+            setTimeout(() => {
+                box.style.opacity = 0;
+                box.style.transform = 'translateX(-50%) translateY(16px)';
+            }, 2500);
+        }
+
+        function openMobileMenu() {
+            DOM.mobileMenuModal.classList.remove('hidden');
+            setTimeout(() => DOM.mobileMenuModal.classList.add('modal-enter-active'), 10);
+        }
+
+        function closeMobileMenu() {
+            DOM.mobileMenuModal.classList.remove('modal-enter-active');
+            setTimeout(() => DOM.mobileMenuModal.classList.add('hidden'), 250);
+        }
+
+        // Navigation Setup
+        function setupNavigation() {
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    document.querySelector(anchor.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+                    if (DOM.mobileMenuModal.classList.contains('modal-enter-active')) closeMobileMenu();
+                });
+            });
+
+            DOM.mobileMenuBtn.addEventListener('click', openMobileMenu);
+            DOM.closeModalBtn.addEventListener('click', closeMobileMenu);
+            DOM.mobileMenuModal.addEventListener('click', (e) => {
+                if (e.target.id === 'mobile-menu-modal') closeMobileMenu();
+            });
+        }
+
+        // Back to Top Button
+        function setupBackToTop() {
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 250) {
+                    DOM.backToTopBtn.style.opacity = 1;
+                    DOM.backToTopBtn.style.transform = 'translateY(0)';
+                    DOM.backToTopBtn.style.pointerEvents = 'auto';
+                } else {
+                    DOM.backToTopBtn.style.opacity = 0;
+                    DOM.backToTopBtn.style.transform = 'translateY(16px)';
+                    DOM.backToTopBtn.style.pointerEvents = 'none';
+                }
+            });
+
+            DOM.backToTopBtn.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        // Portfolio Rendering
+        function renderPortfolio(filter = 'all') {
+            DOM.portfolioGrid.innerHTML = '';
+            const filteredItems = filter === 'all' ? portfolioItems : portfolioItems.filter(item => item.category === filter);
+            filteredItems.forEach((item, index) => {
+                const img = document.createElement('img');
+                img.src = item.image;
+                img.alt = item.alt;
+                img.loading = 'lazy';
+                img.className = 'rounded-xl mb-3 w-full';
+                const div = document.createElement('div');
+                div.className = 'glass-morphism p-3 rounded-2xl flex flex-col animate-reveal';
+                div.style.animationDelay = `${index * 0.1}s`;
+                div.innerHTML = `
+                    <h3 class="text-base md:text-lg font-semibold text-gray-800 mb-2">${item.title}</h3>
+                    <p class="text-gray-600 text-xs flex-grow">${item.description}</p>
+                `;
+                div.prepend(img);
+                DOM.portfolioGrid.appendChild(div);
+            });
+        }
+
+        function setupPortfolioFilters() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderPortfolio(btn.dataset.filter);
+                });
+            });
+        }
+
+        // Form Handling
+        function setupContactForm() {
+            DOM.contactForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('name').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const message = document.getElementById('message').value.trim();
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+                if (!name || !email || !message) {
+                    showMessage('Please fill in all fields.', true);
+                    return;
+                }
+                if (!emailRegex.test(email)) {
+                    showMessage('Please enter a valid email address.', true);
+                    return;
+                }
+
+                const contacts = JSON.parse(localStorage.getItem('contacts') || '[]');
+                contacts.push({ name, email, message, timestamp: new Date() });
+                localStorage.setItem('contacts', JSON.stringify(contacts));
+                showMessage('Message sent successfully!');
+                DOM.contactForm.reset();
+            });
+        }
+
+        // Three.js Editor
+        function initThreeJS() {
+            const canvas = document.getElementById('threed-canvas');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xeff6ff);
+            camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5).normalize();
+            scene.add(directionalLight);
+            pointLight = new THREE.PointLight(0xa5b4fc, 1.0, 100);
+            pointLight.position.set(-3, 3, 3);
+            scene.add(pointLight);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 2;
+            controls.maxDistance = 10;
+            controls.enablePan = false;
+            controls.enableZoom = true;
+            controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+            addObject('cube', '#3b82f6', { x: 0, y: 0, z: 0 });
+            animate();
+        }
+
+        function addObject(shape, color, position) {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(position.x, position.y, position.z);
+            scene.add(mesh);
+            objects.push({ mesh, shape, color, position });
+            history.push({ action: 'add', object: { shape, color, position } });
+        }
+
+        function undo() {
+            if (history.length === 0) return;
+            const lastAction = history.pop();
+            if (lastAction.action === 'add') {
+                scene.remove(objects[objects.length - 1].mesh);
+                objects.pop();
+            }
+            renderer.render(scene, camera);
+        }
+
+        function exportGLTF() {
+            const exporter = new THREE.GLTFExporter();
+            exporter.parse(scene, (gltf) => {
+                const output = JSON.stringify(gltf, null, 2);
+                const blob = new Blob([output], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'design.gltf';
+                link.click();
+                URL.revokeObjectURL(url);
+                showMessage('Design exported as GLTF!');
+            }, { binary: false });
+        }
+
+        function saveDesign() {
+            const designs = JSON.parse(localStorage.getItem('designs') || '[]');
+            designs.push({ objects, timestamp: new Date() });
+            localStorage.setItem('designs', JSON.stringify(designs));
+            showMessage('Design saved successfully!');
+        }
+
+        function onWindowResize() {
+            const canvas = document.getElementById('threed-canvas');
+            camera.aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            objects.forEach(obj => {
+                obj.mesh.rotation.y += 0.01;
+                obj.mesh.rotation.x += 0.005;
+            });
+            renderer.render(scene, camera);
+        }
+
+        // Setup 3D Editor Controls
+        function setupEditorControls() {
+            DOM.colorPicker.addEventListener('input', () => {
+                if (objects.length > 0) {
+                    objects[objects.length - 1].mesh.material.color.set(DOM.colorPicker.value);
+                }
+            });
+
+            DOM.lightIntensitySlider.addEventListener('input', () => {
+                ambientLight.intensity = parseFloat(DOM.lightIntensitySlider.value);
+            });
+
+            DOM.addObjectBtn.addEventListener('click', () => {
+                addObject('cube', DOM.colorPicker.value, { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: 0 });
+            });
+
+            DOM.undoBtn.addEventListener('click', undo);
+            DOM.exportBtn.addEventListener('click', exportGLTF);
+            DOM.saveDesignBtn.addEventListener('click', saveDesign);
+        }
+
+        // Keyboard Shortcuts
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && document.activeElement.tagName === 'BUTTON') {
+                    document.activeElement.click();
+                }
+                if (e.ctrlKey && e.key === 'z') undo();
+            });
+        }
+
+        // Initialize
+        function init() {
+            setupInteraction();
+            setupGradientCanvases();
+            setupNavigation();
+            setupBackToTop();
+            setupPortfolioFilters();
+            setupContactForm();
+            setupEditorControls();
+            setupKeyboardShortcuts();
+            renderPortfolio();
+            initThreeJS();
+            window.addEventListener('resize', onWindowResize);
+            onWindowResize();
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
